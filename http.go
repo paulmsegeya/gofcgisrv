@@ -110,12 +110,7 @@ func ProcessResponse(stdoutRead io.Reader, rw http.ResponseWriter, req *http.Req
 	headers := make(http.Header)
 	statusCode := 0
 	for {
-		line, isPrefix, err := linebody.ReadLine()
-		if isPrefix {
-			rw.WriteHeader(http.StatusInternalServerError)
-			logger.Printf("fcgi: long header line from subprocess.")
-			return
-		}
+		line, err := linebody.ReadString('\n')
 		if err == io.EOF {
 			break
 		}
@@ -124,10 +119,18 @@ func ProcessResponse(stdoutRead io.Reader, rw http.ResponseWriter, req *http.Req
 			logger.Printf("fcgi: error reading headers: %v", err)
 			return
 		}
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			drop := 1
+			if len(line) > 1 && line[len(line)-2] == '\r' {
+				drop = 2
+			}
+			line = line[:len(line)-drop]
+		}
 		if len(line) == 0 {
 			break
 		}
-		parts := strings.SplitN(string(line), ":", 2)
+
+		parts := strings.SplitN(line, ":", 2)
 		if len(parts) < 2 {
 			logger.Printf("fcgi: bogus header line: %s", string(line))
 			continue
